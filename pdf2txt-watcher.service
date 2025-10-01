@@ -1,0 +1,17 @@
+[Unit]
+Description=Watcher para conversão PDF -> TXT (pdf2txt-server)
+After=network.target
+
+[Service]
+Type=simple
+User=afonso
+WorkingDirectory=/home/afonso/projetos_python/pdf2txt-server
+ExecStart=/home/afonso/projetos_python/pdf2txt-server/.venv/bin/python /home/afonso/projetos_python/pdf2txt-server/watcher.py --config /home/afonso/projetos_python/pdf2txt-server/config.yml
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+
+
