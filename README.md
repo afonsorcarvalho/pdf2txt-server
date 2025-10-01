@@ -4,7 +4,7 @@ Serviço automatizado para conversão de arquivos PDF para TXT no Raspberry Pi, 
 
 ## 📋 Visão Geral
 
-Este sistema monitora continuamente um diretório configurado, convertendo automaticamente arquivos PDF para TXT sempre que:
+Este sistema monitora continuamente um ou mais diretórios configurados, convertendo automaticamente arquivos PDF para TXT sempre que:
 - Um novo arquivo PDF é adicionado
 - Um arquivo PDF existente é modificado
 - O arquivo TXT correspondente não existe ou está desatualizado
@@ -13,7 +13,7 @@ Este sistema monitora continuamente um diretório configurado, convertendo autom
 
 ```
 pdf2txt-server/
-├── config.yml              # Configuração do diretório monitorado
+├── config.yml              # Configuração dos diretórios monitorados
 ├── watcher.py              # Serviço principal de monitoramento
 ├── pdf2txt.py              # Script original de conversão PDF→TXT
 ├── pdf2txt-watcher.service # Unit do systemd
@@ -44,19 +44,38 @@ chmod +x install.sh
 O script de instalação irá:
 1. Criar ambiente virtual Python (`.venv`)
 2. Instalar dependências (`pdfplumber`, `watchdog`, `PyYAML`)
-3. Criar diretório de monitoramento se não existir
+3. Criar diretórios de monitoramento se não existirem
 4. Registrar serviço systemd
 5. Iniciar o serviço automaticamente
 
 ## ⚙️ Configuração
 
 ### Arquivo `config.yml`
+
+#### Configuração com múltiplos diretórios (recomendado):
+```yaml
+# Configuração de diretórios para monitoramento
+# Suporte a múltiplos diretórios
+watch_directories:
+  - "/caminho/para/diretorio/pdf1"
+  - "/caminho/para/diretorio/pdf2"
+  - "/caminho/para/diretorio/pdf3"
+```
+
+#### Configuração com um único diretório (compatibilidade):
 ```yaml
 watch_directory: "/caminho/para/diretorio/pdf"
 ```
 
-**Exemplo:**
+**Exemplos:**
 ```yaml
+# Múltiplos diretórios
+watch_directories:
+  - "/home/pi/documentos/pdfs"
+  - "/home/pi/relatorios"
+  - "/home/pi/manuais"
+
+# Ou um único diretório (formato antigo)
 watch_directory: "/home/pi/documentos/pdfs"
 ```
 
@@ -70,21 +89,23 @@ RUN_USER="seu_usuario"
 
 ### 1. Inicialização
 - Carrega configuração do `config.yml`
-- Cria diretório de monitoramento se necessário
-- Executa sincronização inicial de PDFs existentes
-- Inicia monitoramento em tempo real
+- Cria diretórios de monitoramento se necessário
+- Executa sincronização inicial de PDFs existentes em todos os diretórios
+- Inicia monitoramento em tempo real para cada diretório
 
 ### 2. Sincronização Inicial
-O sistema verifica todos os PDFs existentes no diretório e:
+O sistema verifica todos os PDFs existentes em cada diretório configurado e:
 - Converte PDFs que não possuem TXT correspondente
 - Atualiza TXTs desatualizados (PDF mais recente que TXT)
 - Ignora PDFs já sincronizados
+- Processa cada diretório sequencialmente
 
 ### 3. Monitoramento em Tempo Real
-Utiliza a biblioteca `watchdog` para detectar:
+Utiliza a biblioteca `watchdog` para detectar em cada diretório configurado:
 - **Criação** de novos arquivos PDF
 - **Modificação** de arquivos PDF existentes
 - **Movimentação** de arquivos PDF para o diretório
+- Cada diretório é monitorado independentemente
 
 ### 4. Lógica de Conversão
 ```python
@@ -164,8 +185,9 @@ rm -rf .venv
 
 ### Entrada
 - **Formato:** PDF
-- **Localização:** Diretório configurado em `config.yml`
+- **Localização:** Diretórios configurados em `config.yml`
 - **Suporte:** Arquivos PDF padrão
+- **Múltiplos diretórios:** Suporte a monitoramento simultâneo
 
 ### Saída
 - **Formato:** TXT (UTF-8)
@@ -174,11 +196,20 @@ rm -rf .venv
 
 ### Exemplo
 ```
+# Estrutura com múltiplos diretórios
 documentos/
 ├── relatorio.pdf    # Arquivo original
 ├── relatorio.txt    # Arquivo convertido
 ├── manual.pdf
 └── manual.txt
+
+relatorios/
+├── vendas.pdf
+└── vendas.txt
+
+manuais/
+├── usuario.pdf
+└── usuario.txt
 ```
 
 ## 🔍 Dependências

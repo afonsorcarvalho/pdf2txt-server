@@ -1,3 +1,9 @@
-watch_directory: "/home/afonso/projetos_python/pdf2txt-server/ciclos_exemplos"
+# Configuração de diretórios para monitoramento
+# Suporte a múltiplos diretórios
+watch_directories:
+  - "/home/afonso/projetos_python/pdf2txt-server/ciclos_exemplos"
+  # Adicione mais diretórios conforme necessário:
+  # - "/caminho/para/outro/diretorio"
+  # - "/caminho/para/mais/um/diretorio"
 
 

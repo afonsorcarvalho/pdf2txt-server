@@ -66,12 +66,14 @@ def convert_pdf_to_txt(pdf2txt_script: Path, pdf_path: Path) -> None:
         logging.exception("Falha ao converter '%s': %s", pdf_path, exc)
 
 
-def sync_existing_pdfs(pdf2txt_script: Path, watch_dir: Path) -> None:
-    """Faz uma sincronização inicial: converte todos os PDFs que precisam atualização."""
-    for pdf_path in sorted(watch_dir.glob("*.pdf")):
-        txt_path = compute_txt_path(pdf_path)
-        if needs_conversion(pdf_path, txt_path):
-            convert_pdf_to_txt(pdf2txt_script, pdf_path)
+def sync_existing_pdfs(pdf2txt_script: Path, watch_dirs: list[Path]) -> None:
+    """Faz uma sincronização inicial: converte todos os PDFs que precisam atualização em todos os diretórios."""
+    for watch_dir in watch_dirs:
+        logging.info("Sincronizando diretório: %s", watch_dir)
+        for pdf_path in sorted(watch_dir.glob("*.pdf")):
+            txt_path = compute_txt_path(pdf_path)
+            if needs_conversion(pdf_path, txt_path):
+                convert_pdf_to_txt(pdf2txt_script, pdf_path)
 
 
 class PdfEventHandler(FileSystemEventHandler):
@@ -105,14 +107,28 @@ class PdfEventHandler(FileSystemEventHandler):
             convert_pdf_to_txt(self.pdf2txt_script, path)
 
 
-def load_config(config_path: Path) -> Path:
-    """Carrega o arquivo YAML de configuração e retorna o diretório monitorado."""
+def load_config(config_path: Path) -> list[Path]:
+    """Carrega o arquivo YAML de configuração e retorna a lista de diretórios monitorados."""
     with config_path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
-    watch_dir = data.get("watch_directory")
-    if not watch_dir:
-        raise ValueError("Chave 'watch_directory' não definida em config.yml")
-    return Path(watch_dir).resolve()
+    
+    # Suporte para configuração antiga (watch_directory) e nova (watch_directories)
+    watch_dirs = data.get("watch_directories")
+    if not watch_dirs:
+        # Fallback para configuração antiga
+        watch_dir = data.get("watch_directory")
+        if watch_dir:
+            watch_dirs = [watch_dir]
+        else:
+            raise ValueError("Chave 'watch_directories' ou 'watch_directory' não definida em config.yml")
+    
+    if not isinstance(watch_dirs, list):
+        raise ValueError("'watch_directories' deve ser uma lista de diretórios")
+    
+    if not watch_dirs:
+        raise ValueError("Lista 'watch_directories' não pode estar vazia")
+    
+    return [Path(directory).resolve() for directory in watch_dirs]
 
 
 def configure_logging() -> None:
@@ -139,23 +155,31 @@ def main() -> int:
 
     project_dir, pdf2txt_script = resolve_project_paths()
     config_path = Path(args.config).resolve()
-    watch_dir = load_config(config_path)
+    watch_dirs = load_config(config_path)
 
-    if not watch_dir.exists():
-        logging.info("Criando diretório monitorado: %s", watch_dir)
-        watch_dir.mkdir(parents=True, exist_ok=True)
+    # Cria diretórios que não existem
+    for watch_dir in watch_dirs:
+        if not watch_dir.exists():
+            logging.info("Criando diretório monitorado: %s", watch_dir)
+            watch_dir.mkdir(parents=True, exist_ok=True)
 
     logging.info("Diretório do projeto: %s", project_dir)
     logging.info("Script conversor: %s", pdf2txt_script)
-    logging.info("Monitorando diretório: %s", watch_dir)
+    logging.info("Monitorando %d diretório(s):", len(watch_dirs))
+    for i, watch_dir in enumerate(watch_dirs, 1):
+        logging.info("  %d. %s", i, watch_dir)
 
     # Sincronização inicial
-    sync_existing_pdfs(pdf2txt_script, watch_dir)
+    sync_existing_pdfs(pdf2txt_script, watch_dirs)
 
-    # Inicia o observer do watchdog
+    # Inicia os observers do watchdog para cada diretório
     event_handler = PdfEventHandler(pdf2txt_script)
     observer = Observer()
-    observer.schedule(event_handler, str(watch_dir), recursive=False)
+    
+    for watch_dir in watch_dirs:
+        observer.schedule(event_handler, str(watch_dir), recursive=False)
+        logging.info("Observer configurado para: %s", watch_dir)
+    
     observer.start()
 
     try:
